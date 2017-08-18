@@ -1,0 +1,76 @@
+---
+resources:
+- name: not-dutch
+  type: time
+  source:
+    interval: 15s
+- name: actually-dutch
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/lisaoakley/actually-dutch.git
+    username: ((username))
+    password: ((password)) 
+- name: actually-dutch-out
+  type: git
+  source:
+    branch: master
+    uri: https://github.com/lisaoakley/actually-dutch.git
+    username: ((username))
+    password: ((password)) 
+- name: hallo-slak
+  type: slack-notification
+  source:
+    url: ((dijkstra-slack-hook))
+
+resource_types:
+- name: slack-notification
+  type: docker-image
+  source:
+    repository: cfcommunity/slack-notification-resource
+    tag: latest
+
+jobs:
+- name: almost-dutch
+  serial: true
+  plan:
+  - get: not-dutch
+    trigger: true
+  - get: actually-dutch
+  - task: spreek-nederlands 
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: concourse/buildroot
+          tag: git
+      inputs:
+        - name: actually-dutch
+      outputs:
+        - name: actually-dutch-out
+      run:
+        path: bash
+        args:
+        - "-c"
+        - |
+          git clone actually-dutch actually-dutch-out
+          cd actually-dutch-out
+          echo 'hallo <3'  >> blurt 
+          git add blurt 
+          git config --global user.name "dijkstra"
+          git config --global user.email "dijkstra@wrath.cf"
+          git commit -m 'Hallo!'
+  - put: actually-dutch-out
+    params: {repository: actually-dutch-out}
+
+- name: slecht-gemaakt
+  plan:
+  - get: actually-dutch-out
+    passed: [almost-dutch]
+    trigger: true
+  - put: hallo-slak
+    params:
+      text_file: actually-dutch-out/blurt
+      username: dijkstra
+      icon_emoji: ":flag-nl:"
